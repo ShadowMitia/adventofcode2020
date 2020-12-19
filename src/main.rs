@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 fn find_sum_pair_in_list(input: &[u32], value: u32) -> (u32, u32) {
     for a in input {
         for b in input {
@@ -87,12 +89,6 @@ fn is_valid_passport(passport: &str) -> bool {
     true
 }
 
-/*
-        ("byr", |val| { return (val => 1920 && val <= 2002); }),
-
-        /* "cid" */
-*/
-
 fn byr_test(val: &str) -> bool {
     if val.len() != 4 {
         return false;
@@ -163,8 +159,10 @@ fn pid_test(val: &str) -> bool {
     val.len() == 9 && val.chars().all(|c| c.is_numeric())
 }
 
+type FieldWithValidationFunc<'a> = (&'a str, for<'r> fn(&'r str) -> bool);
+
 fn is_valid_passport_with_data_validation(passport: &str) -> bool {
-    let required_fields: Vec<(&str, for<'r> fn(&'r str) -> bool)> = vec![
+    let required_fields: Vec<FieldWithValidationFunc> = vec![
         ("byr", byr_test),
         ("iyr", iyr_test),
         ("eyr", eyr_test),
@@ -219,8 +217,56 @@ fn find_airplane_seat(input: &str) -> (u32, u32, u32) {
     (row[0], column[0], id)
 }
 
+fn get_sums(numbers: &[u64]) -> Vec<u64> {
+    let mut res = Vec::new();
+    for n1 in numbers {
+        for n2 in numbers {
+            if n1 != n2 {
+                res.push(n1 + n2);
+            }
+        }
+    }
+    res
+}
+
+fn find_first_invalid_xmas_number(numbers: &[u64], preamble_size: u64) -> Option<u64> {
+    for k in (preamble_size as usize + 1)..numbers.len() {
+        let sums = get_sums(&numbers[(k - preamble_size as usize - 1)..k]);
+
+        if sums.iter().find(|&&val| val == numbers[k]).is_none() {
+            return Some(numbers[k]);
+        }
+    }
+
+    None
+}
+
+fn find_contiguous_set_sum_to(number: u64, numbers: &[u64]) -> Vec<u64> {
+    let mut i = 0;
+    let mut j = 2;
+    loop {
+        let sum = numbers.iter().skip(i).take(j).sum::<u64>();
+        if sum == number {
+            return numbers
+                .iter()
+                .skip(i)
+                .take(j)
+                .copied()
+                .collect::<Vec<u64>>();
+        }
+
+        if sum > number {
+            i = 0;
+            j += 1;
+        }
+        i += 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
 
     #[test]
@@ -458,6 +504,307 @@ iyr:2010 hgt:158cm hcl:#b6652a ecl:blu byr:1944 eyr:2021 pid:093154719
         for (i, r) in input.iter().zip(results) {
             assert_eq!(find_airplane_seat(i), r);
         }
+    }
+
+    #[test]
+    fn day6_part1_test() {
+        let input = r#"abc
+
+        a
+        b
+        c
+        
+        ab
+        ac
+        
+        a
+        a
+        a
+        a
+        
+        b"#
+        .lines()
+        .map(|s| s.trim())
+        .collect::<Vec<&str>>();
+
+        let mut groups = Vec::new();
+        let mut group = HashSet::new();
+
+        for line in input {
+            if line.is_empty() {
+                groups.push(group);
+                group = HashSet::new();
+            }
+            line.chars().for_each(|c| {
+                group.insert(c);
+            });
+        }
+        groups.push(group);
+
+        assert_eq!(groups.iter().map(|g| g.len()).sum::<usize>(), 11);
+    }
+
+    #[test]
+    fn day6_part2_test() {
+        let input = r#"abc
+
+        a
+        b
+        c
+        
+        ab
+        ac
+        
+        a
+        a
+        a
+        a
+        
+        b"#
+        .lines()
+        .map(|s| s.trim())
+        .collect::<Vec<&str>>();
+
+        let mut groups = Vec::new();
+        let mut group = HashMap::new();
+
+        let mut group_size = 0;
+
+        for line in input {
+            if line.is_empty() {
+                groups.push((group, group_size));
+                group = HashMap::new();
+                group_size = 0;
+                continue;
+            }
+            line.chars().for_each(|c| {
+                *group.entry(c).or_insert(0) += 1;
+            });
+            group_size += 1;
+        }
+        groups.push((group, group_size));
+
+        println!("{:#?}", groups);
+
+        assert_eq!(
+            groups
+                .iter()
+                .map(|(group, size)| group
+                    .iter()
+                    .filter(|(_, i)| *i == size)
+                    .map(|(c, _)| c)
+                    .collect::<Vec<&char>>())
+                .map(|m| m.len())
+                .sum::<usize>(),
+            6
+        );
+    }
+
+    #[test]
+    fn day7_part1_test() {
+        // let input = r#"light red bags contain 1 bright white bag, 2 muted yellow bags.
+        // dark orange bags contain 3 bright white bags, 4 muted yellow bags.
+        // bright white bags contain 1 shiny gold bag.
+        // muted yellow bags contain 2 shiny gold bags, 9 faded blue bags.
+        // shiny gold bags contain 1 dark olive bag, 2 vibrant plum bags.
+        // dark olive bags contain 3 faded blue bags, 4 dotted black bags.
+        // vibrant plum bags contain 5 faded blue bags, 6 dotted black bags.
+        // faded blue bags contain no other bags.
+        // dotted black bags contain no other bags."#
+        //     .lines()
+        //     .map(|s| s.trim())
+        //     .collect::<Vec<&str>>();
+
+        // let mut rules = HashMap::new();
+
+        // for line in input {
+        //     let bag = &line[..line.find("bags").unwrap() - 1];
+        //     let contained_bags = &line[line.find("contain").unwrap() + 8..];
+        //     let contained_bags = contained_bags.split(',');
+        //     let contained_bags = contained_bags.filter(|&s| s.find("no").is_none());
+        //     let contained_bags = contained_bags
+        //         .map(|data| {
+        //             // println!("{:#?}", data.trim().split(' '));
+
+        //             let data = data.trim().split(' ').collect::<Vec<&str>>();
+
+        //             let quantity = data[0];
+        //             let color = format!("{} {}", data[1], data[2]);
+
+        //             (color, quantity.parse().unwrap())
+        //         })
+        //         .collect::<Vec<(String, u32)>>();
+
+        //     // println!("{:#?}", contained_bags);
+
+        //     rules.insert(bag, contained_bags);
+        // }
+
+        // println!("{:#?}", rules);
+
+        // let bags = rules
+        //     .iter()
+        //     .scan(0, |state, (bag, inner_bags)| {
+
+        //         if inner_bags.iter().any(|(s, _)| s == "shiny gold") {
+        //             *state += 1;
+        //         }
+
+        //         for (bag, _) in inner_bags {
+        //             if bag == "shiny gold" {
+        //                 continue;
+        //             }
+        //             if state.iter().find(|&&s| s == *bag).is_none() {
+        //                 for (inner_bag, _) in rules.get(bag.as_str()).unwrap().iter() {
+        //                     if inner_bag == "shiny gold" {
+        //                         *state += 1;
+        //                     }
+        //                 }
+        //             }
+        //         }
+
+        //         // let res = inner_bags
+        //         //     .iter()
+        //         //     .filter(|(s, _)| s == "shiny gold")
+        //         //     .filter(|(bag, _)| rules.get(bag.as_str()).unwrap().iter().count() > 0)
+        //         //     .count();
+
+        //         // println!("{}", res);
+
+        //         Some(*state)
+        //     }).last().unwrap();
+
+        // println!("{:?}", bags);
+
+        // assert_eq!(bags.len(), 4);
+    }
+
+    #[test]
+    fn day8_part1_test() {
+        let input = r#"nop +0
+        acc +1
+        jmp +4
+        acc +3
+        jmp -3
+        acc -99
+        acc +1
+        jmp -4
+        acc +6"#;
+
+        let instructions = input.lines().map(|s| s.trim()).collect::<Vec<&str>>();
+        let mut cpu = HGCCpu::new();
+        let mut stackpointer_history = HashSet::new();
+        let mut last_accumulator = 0;
+        loop {
+            cpu.execute(instructions[cpu.stackpointer as usize]);
+            let res = stackpointer_history.insert(cpu.stackpointer);
+            if !res {
+                assert_eq!(last_accumulator, 5);
+                return;
+            }
+            last_accumulator = cpu.accumulator;
+        }
+    }
+
+    #[test]
+    fn day9_part1_test() {
+        let input = r#"35
+        20
+        15
+        25
+        47
+        40
+        62
+        55
+        65
+        95
+        102
+        117
+        150
+        182
+        127
+        219
+        299
+        277
+        309
+        576"#;
+
+        let numbers = input
+            .lines()
+            .map(|s| s.trim().parse::<u64>().unwrap())
+            .collect::<Vec<u64>>();
+
+        let invalid = find_first_invalid_xmas_number(&numbers, 5);
+
+        assert_eq!(invalid.unwrap(), 127);
+    }
+
+    #[test]
+    fn day9_part2_test() {
+        let input = r#"35
+        20
+        15
+        25
+        47
+        40
+        62
+        55
+        65
+        95
+        102
+        117
+        150
+        182
+        127
+        219
+        299
+        277
+        309
+        576"#;
+
+        let numbers = input
+            .lines()
+            .map(|s| s.trim().parse::<u64>().unwrap())
+            .collect::<Vec<u64>>();
+
+        let number = find_first_invalid_xmas_number(&numbers, 5).unwrap();
+
+        let set = find_contiguous_set_sum_to(number, &numbers);
+        let smallest = set.iter().min().unwrap();
+        let highest = set.iter().max().unwrap();
+
+        assert_eq!(smallest + highest, 62);
+    }
+}
+
+struct HGCCpu {
+    accumulator: isize,
+    stackpointer: isize,
+}
+
+impl HGCCpu {
+    fn new() -> Self {
+        HGCCpu {
+            accumulator: 0,
+            stackpointer: 0,
+        }
+    }
+    fn execute(&mut self, command: &str) {
+        let data = command.split(' ').collect::<Vec<&str>>();
+        // println!("{:?}", data);
+        let command = data[0];
+        let arg = data[1].trim().parse::<isize>().unwrap();
+        // println!("Running {} {}", command, arg);
+        match command {
+            "nop" => self.stackpointer += 1,
+            "acc" => {
+                self.accumulator += arg;
+                self.stackpointer += 1;
+            }
+            "jmp" => self.stackpointer += arg,
+            _ => panic!("Unknown command {}", command),
+        }
+        // println!("cpu {} {}", self.stackpointer, self.accumulator);
     }
 }
 
@@ -3878,4 +4225,3913 @@ FFFBBFFRLR"#
         .collect::<Vec<&u32>>()[0];
 
     println!("Day 5 - part 2 result {}", seat_id);
+
+    let input = r#"necytxmlfhsu
+    uecosjvlhpmk
+    
+    mnslbuziphawkxyg
+    whpmnesikaglzb
+    
+    kaw
+    akw
+    
+    qurg
+    hrqug
+    qrgu
+    gruq
+    
+    sczomkv
+    zejkhvslmucbwdo
+    pxsianovzcmk
+    tcokmvsyz
+    ozskvimcr
+    
+    tfzajkxngwsqrbleic
+    tijoqnerxsplwzgabkfc
+    ogkezbiwqtaxrscljfn
+    xsqauezwnjckbtgiryfdml
+    
+    piz
+    zip
+    
+    tlp
+    npl
+    lpt
+    
+    idbnxuclqgw
+    sxfdnlatmbhcowigj
+    plzgbwdqkcinx
+    ydxinwgcblr
+    
+    nbuxjwhsrlekfyzpq
+    kecyiurjfvqpbxhzsn
+    nkxfhpbsuyrqjezom
+    tinlhkbjsuydrqpzexf
+    pnzraelgquxhydsbjkf
+    
+    obvmw
+    eoczsqun
+    
+    nhdxqwk
+    dnzmlxwhkapq
+    whxqdnk
+    
+    jnqdabgc
+    nacqdbgj
+    
+    buyskiwz
+    uazbkwys
+    
+    mbfxswpli
+    uswalhxz
+    xnq
+    tdcrjgoyekv
+    
+    fancdpkmtuqy
+    zdmenqjpaxftuy
+    
+    jkul
+    d
+    o
+    
+    vhpoxgqsrtce
+    hgopxeqcdrstv
+    xcvrqoetpsgh
+    
+    gekpzayfux
+    pyegazxukf
+    pkxaezhgyfu
+    fegypukaxz
+    zxpyefugka
+    
+    yrpfd
+    ydsh
+    
+    smjqcafnug
+    mnicqsu
+    
+    tkxi
+    ixakt
+    tfncxkmi
+    
+    kedibluzopjhagvtxf
+    afiklbvtjeoudhgpzx
+    lavbxpjzgedktoifuh
+    tbgpaxjqeoifvklhzud
+    zghidtfplxbvkoueja
+    
+    gtvnqyrmf
+    hogpb
+    
+    cnelsqwj
+    atyimdbvfxuozkg
+    
+    lgybpaeztvhrxducjiqosmnwk
+    ivpaygxweszductombhljrqk
+    
+    grli
+    lrig
+    sjglri
+    girl
+    rigl
+    
+    qnwmxjbpecoyztufidhsg
+    ynqdiwhmusgtebjfzxcpo
+    
+    luasrtmfkgywv
+    vgskmufywrat
+    
+    ceyux
+    ycux
+    
+    nurijfsovkbxdp
+    ayqclmthgzwe
+    
+    xeqjdhsubiovwrg
+    gobdjqwvusehrx
+    weqjgvhosudrbx
+    ngdubsvqxejrhow
+    
+    ywdfqpxekujbovr
+    yujfdoqbkxrepvw
+    owfkudjbvyrxqep
+    oqjvedypxukwbrf
+    xufwdpebyjrqokv
+    
+    csujqndzmw
+    wznscqmjud
+    cqpwjzmunda
+    wjumnzcqd
+    
+    dhsow
+    ohswd
+    wsnogh
+    
+    cxfltiq
+    ixztfq
+    gtfqiux
+    jtqfxi
+    xiftzq
+    
+    tr
+    rt
+    rt
+    
+    pnuztcbegwiksd
+    cuewibkptdnm
+    nvqdpcjxekiwtauhofb
+    pbytreinuwdkc
+    
+    y
+    y
+    hejq
+    
+    rvmwqn
+    wvrmq
+    
+    knxmwecsjlrft
+    hnmwzaqt
+    dmywnitg
+    tmwvquonh
+    bwqvtmnh
+    
+    e
+    e
+    e
+    
+    qjtywgdlek
+    nhifs
+    zvxinh
+    
+    nzhroemi
+    dzruoegimh
+    emzoirh
+    
+    hpfkraltbxg
+    gazxlmphrt
+    
+    jyhugbxqz
+    zbnox
+    epdilfaw
+    
+    vmr
+    vsfm
+    fmvsr
+    mnvckiaqy
+    
+    zegpfuwtkrnoqdh
+    eorznfkgpduth
+    tkfpzhnredguo
+    
+    zmqkwxipctney
+    ncwzeqpmkiytx
+    yptienwzxkcqm
+    yeqwcpxtkzmin
+    
+    csbdyzl
+    ejoiwtzqabm
+    lzbkup
+    zbvprxf
+    
+    wvpshngbmiftuzrxoyde
+    szobihvwpdtylqerc
+    phbdzoikvtajyesrw
+    
+    ymuflnrxspqvkihbe
+    eymxrhlfnqksuivbp
+    
+    rktwzd
+    wtdkzir
+    wkmaziqdrt
+    togpzwdkr
+    
+    uwiazbylcpojst
+    lcyibajuptwzso
+    
+    dtoqbcxhlyrpfwjnkasugvm
+    wunkfstmcjhqxliogrdvpy
+    
+    wpnk
+    hdpkwuftjymv
+    cpkownz
+    kpwz
+    rqpwnk
+    
+    tfplznqcju
+    puqlsnzfjtv
+    jqtfpzlun
+    ntqpczjflu
+    
+    ozalwumpqv
+    ztheoalrwsciyk
+    
+    wyiqbsr
+    bysqwri
+    yrbswiq
+    iqwrsyb
+    iwbrysq
+    
+    elnroc
+    zmjlre
+    vhelbru
+    jyhruezflvk
+    
+    ftyceboh
+    ofybh
+    
+    jvlbdm
+    noakrg
+    
+    dokjncqauebfpmszvtl
+    suebonpdjmflaqctkvz
+    dtjzmcblsvokpunaefq
+    tjzmeqkafluvpbconsd
+    
+    qhrmvegsicnyupf
+    uifknverhsg
+    izlrvgefndjwasuh
+    
+    syxvtjwfucilqogmnpk
+    jwkytpqofgimvcsnlxu
+    dwhglcxzoqnmjfkuiyvpst
+    ygwntxipqlmvkufcsoj
+    
+    hdnqaburow
+    hqwadmbocsgue
+    bwoqtuadh
+    adqhbwuo
+    
+    dzfohqe
+    ehfqzod
+    fdzhoqe
+    hdofzeq
+    
+    sxmkrghyvlwzbc
+    yhkmwzxbgsvlc
+    
+    qdumkytwlfsrja
+    drfqukzymilsjaw
+    jkwqumylsardf
+    
+    pcvs
+    prvc
+    hmbpvc
+    svrpzc
+    
+    epkjyc
+    jerpoy
+    gjpye
+    abxepuyj
+    ejyopc
+    
+    ohe
+    gheo
+    eoh
+    ofehy
+    
+    klhziowmjpyfubdsaqtgvrcn
+    aytbormdiksnqpzhcfvulgjw
+    lhmvkafdrscjgwnyiuptqobz
+    
+    vcrqpdxljnmgusie
+    cgdwmipluoe
+    
+    hqibentfmxyszljow
+    msozdjnibrfytxqhle
+    imlyxwehznjsbft
+    ysifkzbljphuxcmenvt
+    
+    vjhdmkrpecniafgqlstxyzb
+    zxjrkebfvcwyqihlsmpgtd
+    xrfzidgthsbklmveypqcj
+    vjxytzgdlbefsirkcmpqh
+    
+    dyxrwbngpijkt
+    xtwkdipaygjr
+    iklrmzwpjxgdtuye
+    pdgrxyjkitw
+    xtirhvwgdkjyp
+    
+    zbjdt
+    jdat
+    shouqjtxcd
+    
+    klarpuiv
+    iqaxjdps
+    cpnafbsi
+    
+    xfpiourcst
+    ovfrlutxpb
+    trgqfxjuop
+    rsktucfpox
+    rtufoqpx
+    
+    g
+    g
+    g
+    
+    nfutbyvj
+    umvwyi
+    
+    tjniwlydzqpsxbkcmugf
+    utpmixqdvzbfcwgljs
+    
+    wetypdlnxm
+    cfavwyzji
+    mywgu
+    lyorqkbw
+    whdeyxp
+    
+    qsbnwozepvhkmaxdrt
+    qmsopwtaznxfkehdyrv
+    xnvhwrzpemkqdtsoa
+    ituvkrhmdegazwsobnxpq
+    
+    fxhwdio
+    hofdxi
+    hivztfonxdg
+    fhkoidx
+    
+    ja
+    jca
+    ajzxt
+    ahjy
+    tajc
+    
+    epan
+    pcn
+    udn
+    
+    mfowepjdlnkags
+    oakwgflnp
+    pnlzgoawfk
+    kfgrowlnap
+    
+    uw
+    aimwo
+    wzrhcjeq
+    wtf
+    w
+    
+    x
+    tvx
+    x
+    
+    tigsjdufrwomv
+    vjrstigqudohwkm
+    visrjodutwbmg
+    
+    ety
+    exatp
+    hicfzqnb
+    uvejo
+    
+    oqlgmk
+    kgvqxd
+    jzhgkpdqy
+    ikegfwatqub
+    nlogqkz
+    
+    sl
+    q
+    
+    rkpew
+    eqrwk
+    rakwe
+    
+    r
+    r
+    r
+    rb
+    
+    u
+    pua
+    
+    pjmhtvd
+    drjnpuvib
+    djsplvy
+    dpvj
+    
+    caugyqs
+    hxwyqst
+    sougylqre
+    
+    krfshpzjmgav
+    uwrqidcotlbxhj
+    
+    mzivctbfjgwq
+    lsomkypgajiq
+    
+    ikoamrpc
+    kmociarp
+    brkmpiwycoa
+    itmckrodpa
+    kmipacro
+    
+    htbpcdqx
+    ctpbxdq
+    
+    gpduzcoiyxhleqrknbaw
+    nirehbulapcoxkzwdy
+    icuzyxopwhkalendrb
+    aokdrxhlcebpyiuwnz
+    
+    yzlvptdaubjerkh
+    iyaoltghebpndkjszr
+    kqxjtldzpbcyawh
+    dbjtlavzmfhkyp
+    
+    vg
+    sv
+    
+    cdiaynroehqw
+    cqtaridyohewn
+    dciornehwayq
+    rwhnoaeqicdy
+    wqroadniechy
+    
+    ivstkj
+    vgciqk
+    qkivg
+    vkgi
+    
+    fp
+    pf
+    pf
+    fp
+    fp
+    
+    xidyqnk
+    jbicfant
+    zabfhin
+    
+    oqtys
+    stqyo
+    syqot
+    yostq
+    boqytws
+    
+    gmnqxaictud
+    tucidaxqnmg
+    pgtquxidcnma
+    iagdtcfmquxn
+    
+    yfhxgw
+    rgn
+    nsog
+    
+    wndrqktbmfa
+    fwqadkrtbnm
+    mabfntkqword
+    qbwntakrmdf
+    
+    elanoudxhbzfrtvci
+    ztalefiodxrubvckhn
+    ulvabcnthpdzxoifer
+    
+    omdrvepliwafhjynbscu
+    mblrxjsfahocwnvyu
+    umcjlsowatvnfybhr
+    uahvcnbwlmsjzfoyr
+    
+    n
+    tn
+    n
+    
+    grk
+    rgk
+    krg
+    gkr
+    rgkhv
+    
+    stmlnek
+    pgsltne
+    
+    alcztk
+    bctvk
+    khcgtb
+    
+    nsgevcthrpykbwfoizda
+    khneritgszvbfycaowdp
+    ivybwzeaogdsrnfctphk
+    
+    e
+    e
+    e
+    
+    cxkzdbgiqyawnm
+    afyvkbeirtjowmcl
+    
+    omb
+    p
+    
+    lnhwcoiyafs
+    soihnyxqfc
+    ohncjyifsq
+    
+    o
+    o
+    om
+    oxqnsd
+    oaj
+    
+    okucjhiq
+    xpgwcnqjiomyfluk
+    irhoukdsbjqc
+    
+    uolgz
+    nglczu
+    zlngu
+    zmhlgvjru
+    
+    mhdapszf
+    anmfwdvkc
+    dpamf
+    
+    aqleivtyzsogjc
+    syvbgxqpdflezoac
+    ilvzqsjaegokyc
+    
+    zxndhja
+    haxzd
+    xhazd
+    
+    mo
+    om
+    mo
+    mo
+    
+    vfxep
+    xfepv
+    xevpf
+    vexfp
+    pevfx
+    
+    mrtkehqnjxizgp
+    kbunrqytcmes
+    
+    nz
+    ipneu
+    
+    bznteo
+    tbzeoqwp
+    olftzbpk
+    grzvityxudohjma
+    
+    xg
+    rg
+    
+    rdu
+    urvd
+    rud
+    rzud
+    
+    somnbutz
+    tuosnmb
+    ntomsbu
+    
+    fxsvrzqntbueoyp
+    eqzsvxyunbroptf
+    zvypnrxfsqebuot
+    zrosbxeqpunvfty
+    zprtfvsnbquexoy
+    
+    qwzknfvl
+    funqlwkj
+    nqkwflz
+    fgxlkwzqn
+    
+    rzqihd
+    rbz
+    zr
+    uzer
+    rbz
+    
+    utrq
+    osa
+    pm
+    
+    zgdci
+    brhu
+    
+    bxvymlzqkpha
+    vmhlakpyxq
+    ypxvqkmhal
+    xhvpymaqkl
+    aplqvkhmyx
+    
+    sjntbvyogeplwzu
+    rbjqiefhapxodwk
+    
+    frlsoptqwbc
+    ljrzxqntfom
+    
+    zlhvjamtpfonk
+    lcokjzdhmfvnp
+    siohzynkmbjvlrf
+    
+    osvgwnticelpzm
+    jvswetpozlcg
+    
+    npmgrvysfj
+    nvqxrjfsgmp
+    vofthkcjsblpmudizwr
+    
+    oiev
+    lmeiov
+    oiezyv
+    uievodkac
+    
+    iforupqjzykdtc
+    yqfhdcxvtopz
+    tzqpfdycgo
+    ceyqfozvtpd
+    dpxqflohzyatc
+    
+    srz
+    zsrt
+    strz
+    xzs
+    sz
+    
+    dgo
+    odg
+    ogd
+    dog
+    qogd
+    
+    gotwqhick
+    okhqtgicw
+    gsouwitkjcqh
+    hctgioqwk
+    tkghocwiq
+    
+    mfnziwvxtlpubqryojasd
+    mzojuctvnbriypwflskqda
+    pmuavqjifnlhrtbyzwods
+    
+    ozj
+    joz
+    zjo
+    jzo
+    
+    jzwbhrscm
+    rzmhjctb
+    zbrhcmj
+    
+    sucgimtr
+    myliojcrsg
+    ipcsegxrmv
+    
+    znhvi
+    hvin
+    wosganie
+    
+    wptoqxmafhg
+    awqfhgcozmtx
+    
+    azbqlviyrwjc
+    ybxcrawv
+    
+    qa
+    vcuwbfgsl
+    hkraj
+    
+    biglkjtpoqs
+    zvxcfumeywrhand
+    
+    ske
+    s
+    sp
+    hs
+    
+    n
+    yn
+    n
+    n
+    n
+    
+    lrvsmxzkgi
+    zgrmkdsxl
+    lzgmpakrs
+    wgqtrkmsfz
+    nirmkugzds
+    
+    crewvjdqsplkibthxz
+    wxjmtpirhalqsckbdz
+    
+    iecxrbplho
+    xhrpibovlce
+    brxlgchopei
+    cbhioprexln
+    lchxirebop
+    
+    f
+    f
+    q
+    
+    nxqkrhdi
+    pkhdrquxn
+    ynqdlxkh
+    xghkndq
+    
+    wvknrdjx
+    vknxrwdm
+    kfvicpwndb
+    
+    rcqwlutsanpdz
+    yoxenmkvbjf
+    
+    izqsa
+    sqzai
+    zqsai
+    osiazq
+    izqsa
+    
+    ysokhbpzcqanmdifw
+    kdlowyusmqhbjxci
+    hibkmzocndqswy
+    
+    yjwd
+    bgas
+    yj
+    k
+    
+    tzruq
+    uorz
+    zckrvux
+    
+    rjn
+    nrj
+    nrj
+    jrn
+    njr
+    
+    ecu
+    pzus
+    wokxu
+    ruw
+    twu
+    
+    fcnajztduyripl
+    chmpkvlynsxrauobji
+    
+    cwfgtjre
+    ejwufr
+    frwje
+    newvryfjbhq
+    iwjextrf
+    
+    ltqapiwhzfeoncxdg
+    hndclgoxeiwtpqfz
+    cwnpdogxteilfqhz
+    
+    uerinxhsygpbzcdvfmo
+    lxeihducozgqnrymb
+    edmugnyxifoczrbha
+    ucezhnrsdybmiotgx
+    
+    xuvfhjeyi
+    ztcgaqs
+    
+    yxrospmijwvcdb
+    yjpbrcosuv
+    
+    viuhdrgnlak
+    lniaruvkdgh
+    khrgdnuiavl
+    
+    qfzxb
+    gfqx
+    
+    k
+    nzyo
+    kcj
+    
+    bmi
+    bmi
+    imb
+    imb
+    ubmi
+    
+    pl
+    pl
+    pl
+    lp
+    
+    x
+    v
+    x
+    
+    hgwtocs
+    gdctwhoi
+    iczwfgtoxh
+    
+    wrcjdaqm
+    wsrlog
+    jrnqmcw
+    
+    ouhmpnyskxcqafidbjvgt
+    dnimvbpytfsoagucjx
+    jpctsmuxiaovyqnfdbg
+    gzbvfwmojuyxsrdtpcna
+    yxfolphstnabcmuvjgd
+    
+    nlrdxe
+    ceksxuhazmjo
+    ywxedfgqtpr
+    
+    ckuwoghtaxrledvzms
+    mtksozduwvrehxclag
+    xwvcusrmlazoetkdgh
+    regwvshxkdzuctomal
+    
+    khsnymbpjz
+    hzknspmbj
+    
+    zqc
+    kpgsjrqxiyd
+    wtbuhoq
+    qwc
+    eq
+    
+    ljewzy
+    qlwjy
+    wzljy
+    lwyj
+    ljwy
+    
+    vpodmhni
+    bvryknfg
+    jcutez
+    
+    wedfcoh
+    wigfnjkaoz
+    exwoqfm
+    pfuohsw
+    
+    adyzjwgqxv
+    qjwvxzagyd
+    
+    cazpofbyd
+    nodypfbcam
+    
+    ukvrcslyqzamhteowdfibx
+    ktrgqpmnawdycsivhzlbefx
+    fxdabuylcveksjwrmzqhtio
+    
+    xyb
+    xesy
+    xdqcy
+    yex
+    xy
+    
+    hotd
+    odhzqt
+    othd
+    htod
+    
+    hvkc
+    lzei
+    asw
+    a
+    d
+    
+    q
+    q
+    q
+    q
+    q
+    
+    a
+    a
+    a
+    
+    suqbvedipgzcjykfmaxno
+    jzfudeoxikpbvmgynsha
+    iswkepmodzvfgxnylujba
+    
+    xpqjonkzlrfhtyw
+    fjqksrlozypwnmxth
+    pkrohjnxlfzyqtw
+    
+    pxuhsc
+    hcxsnu
+    hxcse
+    cxhws
+    hcrsex
+    
+    iglfosahy
+    hizgfalodbs
+    lgfoiahs
+    gsfalhyio
+    
+    xrgzwbdnohfeijacsmltqp
+    djpgqrimtwcafsxnlebzoh
+    
+    qlrn
+    qrn
+    qrn
+    qrn
+    
+    xhbiakuzcjm
+    nfpykow
+    klfs
+    
+    lcubkpfhnomgwyarjetqd
+    wtcrgofdnlpbaykquevhj
+    
+    bdqusvnyetklmwizcopxjr
+    drbxlptyeqcvjwiusmzokn
+    oqcjzvuwslkpedbxmrntyi
+    jvlnxtdpkusyczbeomqirw
+    wltriuqnpzcxbysvojdmek
+    
+    tyeorbzjdxpqn
+    oprlqdnwbzyx
+    brnydoqzxp
+    
+    bupvcrylqazehoknjtf
+    aqfroczbylpvuejk
+    ubqvelyfrzoxcpagkj
+    
+    awbzx
+    axuw
+    ywildxoa
+    uwxnba
+    
+    mjfvro
+    wmrfjov
+    ojvmursf
+    
+    zwxouqy
+    ouzyw
+    
+    dsxf
+    sfdti
+    syrfd
+    
+    zmibfjk
+    kimbz
+    
+    nebq
+    beqn
+    eqnb
+    bqnpe
+    
+    avtnckldjpeys
+    scjtklpdneyav
+    kytncdpsvaelj
+    tkpacjysdnvle
+    dycsvtjplenak
+    
+    mkyojv
+    biwro
+    botsx
+    
+    owxyu
+    wyuxo
+    yxwuo
+    
+    qgjplcvo
+    vgjqocpl
+    ojvlcpgq
+    
+    xczvkuohisrfqbagp
+    prbeilfzognvqws
+    voitfqpgjmrzsb
+    rvlfdoqigsbpz
+    ipqogbrzfmsv
+    
+    j
+    s
+    st
+    t
+    pzde
+    
+    kuwbthejxcfrzgosmn
+    xwcukhrtsgzf
+    tkfcguxwshrz
+    hxukfzgdwsrqict
+    zwucgkfqhvxtrs
+    
+    wvthikzpgrjaf
+    swdnemkqobcyx
+    
+    lewoquaprbkxyj
+    xpelwoaksubcrhqd
+    gbrxmluktiwnaopqe
+    epxuyczokafblwjrq
+    
+    mcyepsvwxr
+    bhe
+    nqeztgd
+    uaehil
+    
+    tq
+    be
+    e
+    
+    duqgair
+    dfrwuiqga
+    qaugidr
+    
+    hmofng
+    hgnomf
+    mofghn
+    gmotfhn
+    
+    ewhblqnsmjict
+    whmbxvpjs
+    ufzyaogdkr
+    
+    jqpynazsfvklied
+    sjilykvqza
+    izsvjlqayk
+    qiksvzlajy
+    
+    vbps
+    vbstp
+    evnigorks
+    vbst
+    jslv
+    
+    qgdzylwkbfou
+    jbwygulq
+    qwhxrugpeb
+    giqdfvbwu
+    
+    jubto
+    aeuvgdpx
+    unl
+    yorqui
+    uqm
+    
+    ic
+    kci
+    a
+    i
+    gyfe
+    
+    tjxp
+    xtj
+    xjt
+    
+    ldspeai
+    eapidul
+    peiadl
+    ipelad
+    
+    oymwvfriux
+    moxuywvfir
+    rmvxwoujifyb
+    fpvwdumgyroxzi
+    
+    mcplvnkgjfz
+    idszwngkfcvpl
+    njzfklgcpvo
+    fcvokpnlzg
+    
+    xdnsilr
+    irnlsx
+    
+    bndvimefz
+    atopdu
+    xhswykcqgrjl
+    
+    kvlorsye
+    
+    vsdoq
+    dvos
+    vodjs
+    
+    bxczyfeajkmloi
+    jcimfkaloybxze
+    ceijaokfzyxmlb
+    feymoacbjxikzl
+    kcxmiebzyaoljf
+    
+    lo
+    ol
+    
+    etxkfsgjlqoy
+    fgshieyj
+    esywfgj
+    gwrjsyepf
+    
+    jtzlgakxins
+    gqlznxfabskijp
+    ikaxgsnzljh
+    lgaizhkjxns
+    hgaznkjxtlis
+    
+    urhjiycw
+    rhycisw
+    zrwihkcy
+    
+    xc
+    cvx
+    cx
+    cxgl
+    
+    audxneqrchg
+    efkmodwqplrzsiyb
+    
+    g
+    x
+    x
+    
+    ziuplaqo
+    czqtihuw
+    zufiq
+    nqzubpixak
+    
+    cibdku
+    dbckiu
+    kdciub
+    
+    eshpjzgtwrka
+    tgwpafmsjkrehz
+    sekbwtnxjhpzrag
+    
+    dj
+    dm
+    dj
+    
+    trqkdpwoxjfyg
+    csu
+    ancv
+    lui
+    ebhmaz
+    
+    ljbvexnhgwfs
+    hfjbxneyilwgu
+    znejqblcdhfgwx
+    
+    b
+    b
+    b
+    b
+    b
+    
+    idxrcyjegnu
+    lrhvskceg
+    rozwmgafbce
+    
+    gzasrwjlukomvdxhbpc
+    cahmgzurlvpwxbdjs
+    uxjzsbgmdlchvprwa
+    hramvdjxslubpzgcw
+    
+    gw
+    wge
+    
+    fpgdzy
+    wpfdbz
+    zpfahde
+    lfdpszcorx
+    zfdgbqpha
+    
+    gfuclekqavitdxr
+    euwkvdirqtcxa
+    riuxvaqkcdte
+    
+    eqaphotimfdrukcgwbyx
+    dxtowkygamibqcrfeuhp
+    oiutpbavhdyqergfcmxws
+    ahcteowdfrkugpibqjymx
+    
+    pmixjle
+    uxljemp
+    lkpsej
+    
+    mzqcwxuo
+    xoucwzmq
+    xcumzqsow
+    zcuqxmwo
+    
+    wt
+    wt
+    
+    tyrajn
+    hdtgroynjae
+    jrnyat
+    
+    uqifnlv
+    iqnevl
+    vqienl
+    navciql
+    
+    qjxpshtuzbmfnvogcalw
+    skvzqthufxcjeagrmdiwlyb
+    
+    lvaftw
+    vkfaywtl
+    lfvawtq
+    
+    wpusqdfkybg
+    mghtdxkpsur
+    dsgxhumpk
+    jmdkpzrsixug
+    
+    qcbalvykixze
+    fmrhcsadlnio
+    cpautjihl
+    clgainupm
+    ilcaft
+    
+    pklutwg
+    gdpkrl
+    lrpkg
+    
+    wbup
+    bygfurw
+    ubw
+    
+    xsoqjceyhunvat
+    jshgokqucxvlyn
+    
+    pyk
+    pyk
+    
+    l
+    s
+    
+    m
+    m
+    hm
+    
+    msultwhivz
+    vzitlhwmus
+    htsmluvzwi
+    ihszwmvult
+    iwthzsumvl
+    
+    wlohkegqpb
+    jzguytqrncd
+    igqvesfa
+    
+    h
+    hgy
+    
+    xb
+    x
+    x
+    x
+    x
+    
+    ij
+    ji
+    hqdl
+    
+    k
+    k
+    fkswyr
+    zk
+    
+    frvpln
+    vfcnlpr
+    vfnrlp
+    rnpvfl
+    
+    ouy
+    yu
+    uy
+    yu
+    yug
+    
+    rhekb
+    etnxfymlgdwovqzu
+    csbheji
+    beca
+    
+    vj
+    nfpv
+    v
+    v
+    
+    ruvqehmija
+    mdhjqrayuie
+    ksqrfgjeihpmlu
+    
+    kbsnlqxfrizjauthodp
+    uxdjbqniholafzrskt
+    eaokjungrdfshlbtzqix
+    wjlsbciontzkdqfxhuar
+    qjlosubzkfitnahrdx
+    
+    sbzcefm
+    zsmb
+    szmb
+    mszb
+    smzb
+    
+    xzisbpmc
+    prihnxstmfzb
+    klpbmszijxw
+    vmepbiszxaq
+    zipmjbxvs
+    
+    qjgbnvamedwi
+    qajzdoksweb
+    
+    gtkfqwlzashcen
+    geiqzsnhkfwctv
+    esnmhfzgqutpwyk
+    igselxqndbfwthkz
+    
+    obpdyswkvthxgreanmjluq
+    lahobnkyxtdrqgseuvcj
+    
+    pw
+    wpe
+    ylp
+    ep
+    
+    owrlgniy
+    iljkvwxyhopufzsqdc
+    
+    wxzgdpt
+    saxprdtkf
+    qdxjotpgbwl
+    xtdhjpl
+    utdjphxci
+    
+    gwkrjnizdxbvc
+    hfnpygvaw
+    ygvutnaw
+    
+    pecfzghqxturdijsblmk
+    klsxuqpfhdbctrjgemzi
+    dtuzljfxhmbgciqkeprs
+    
+    iznfycwdrh
+    zwnrchiydf
+    
+    xutwndim
+    osidj
+    
+    knwyjicb
+    jc
+    zjgc
+    cju
+    
+    jwtep
+    hjer
+    egj
+    
+    khwsitfnxyep
+    iwkpnxeh
+    wephiklnx
+    hcigwzkapxremn
+    nwehmapkxib
+    
+    vuqbmineogja
+    dlrpainmvugj
+    ravsmgijfcuhynt
+    awvpiunjmg
+    
+    zdcalubhniv
+    nclhvibudaz
+    vhcdbuznila
+    
+    bzcaorhqflg
+    jteyvpwsuxdnik
+    
+    icr
+    rvic
+    cri
+    ric
+    ric
+    
+    bqikw
+    ibwqk
+    
+    ipxdcvmfulwejyg
+    nqcelgydaskrxhi
+    
+    pkovrgdljyh
+    vq
+    ixwv
+    vsxaczn
+    
+    ix
+    xi
+    ix
+    
+    hkxl
+    hklx
+    uxlkcsvgeh
+    khlyjx
+    blkxh
+    
+    lhgcae
+    yczfas
+    conasulj
+    xgbflezcuayo
+    mvcidtapr
+    
+    iwaepxckbvjnzmqft
+    pwiancxtmufqsvzj
+    cpanmiftxjwqzv
+    mhftvjnxzpowciqa
+    
+    ir
+    rd
+    ir
+    
+    xt
+    xt
+    tx
+    xtk
+    tx
+    
+    rdatjzibwsu
+    mdsuarwtizjb
+    
+    rselwj
+    wetbjy
+    pzxqjowe
+    njtgbvwmei
+    
+    qgcazvn
+    gqsvcnz
+    vczgqn
+    
+    vmufbi
+    efuinvmq
+    uicgmkvr
+    vnmilu
+    ubvwmix
+    
+    lseymvjuidhkoptazcxrw
+    wnbsukhpjoedczrlavgtmf
+    scmrptkhdeazojwvquly
+    
+    qopb
+    evwqyl
+    
+    syuzojncfrliwap
+    wnocfplirjzsa
+    izwrhvftqbdgpcjoasln
+    ljiznraspxofwc
+    rzcpanjowslif
+    
+    lpebrhxtam
+    iyuvknwfso
+    
+    by
+    yb
+    
+    qshtypdlocawvgjb
+    xvyrnwfqezshjoka
+    
+    xhw
+    nwhx
+    hwx
+    whsex
+    
+    xelcghsquwivjydnrzkbfpa
+    elviwcpnsokhjqubgadxyzfr
+    dcfqxvneymsutzkrlpgbjiwah
+    
+    ghckb
+    bgh
+    
+    rdojuvqncia
+    nracovyiw
+    cvryoina
+    echariovn
+    
+    rjmdqahvbplcusigfx
+    cluaqvsfhmrjbpgidx
+    gvchlipxjsaufrbqdm
+    pjdsqmvlcaubfirhxg
+    
+    tngbc
+    btcng
+    nbgct
+    bcgnt
+    
+    aonpsbqkhwclrmdyuz
+    mcgubhqdokarzlspnwy
+    olhybcuasmrdzqwnkp
+    lkshamocyrdznwuqbp
+    wlunozascybqprmhkd
+    
+    skilqth
+    qhlts
+    uslvqt
+    fqstl
+    ftshql
+    
+    fbtxdirelcsqzu
+    icsyjfltxdeurq
+    rueptfdcqylixs
+    usqtxfdrclei
+    lwqdvtxeirsfucna
+    
+    xphvrbl
+    bthixl
+    wqjmohcfxyazlsb
+    vhluxb
+    
+    kbnogjrhe
+    krbngeohj
+    hnekjbrog
+    rkbeognjh
+    kjrohebng
+    
+    z
+    yzn
+    
+    wslprjfqa
+    regwpyqdksaci
+    
+    glmkujvbatqwc
+    mtubqgclavrjwk
+    wuqmjlgcabvtk
+    galuqbvctmkjw
+    ckblwqujgvmat
+    
+    kgrmfstlejw
+    bdithoauynzpv
+    
+    wvyzhfdistmqkrugx
+    nzlspqermfwjahui
+    ufqsipwozmhr
+    
+    fdsavukrbpcm
+    zrasokjlvudmpbf
+    eqvbkfrswpdtumag
+    dmhkfplvbarnus
+    
+    tdorlvb
+    pvdhiko
+    omgsjwuavycxe
+    pziqbovhnf
+    
+    f
+    a
+    u
+    u
+    u
+    
+    efg
+    egf
+    feg
+    fge
+    
+    wsf
+    lmcd
+    f
+    v
+    ve
+    
+    mibscvfqnhoxty
+    rxphcsiqbofvnw
+    uexoibzljkqagcnf
+    
+    sbmhgyqvkuoljzwrfnxietca
+    ocjebltaqwursipnfkmx
+    
+    xeh
+    unxmh
+    
+    du
+    ud
+    ud
+    du
+    
+    tvzo
+    vo
+    ovft
+    vto
+    povdq
+    
+    r
+    s
+    lhibgo
+    qny
+    nwk
+    
+    cwxfhrgjdsyamtkv
+    fshogpwdinlrcjexmt
+    yxvdtzfrsgmcjqwbh
+    
+    zil
+    liz
+    liz
+    
+    iygvphrujkwaxl
+    ikjyutlxawvgrph
+    hvuliyrdjakwpxg
+    rjthkylwipxgvuad
+    wivxkhlausgpjyr
+    
+    vrxkaqzgmsyon
+    vorxcumswqznyag
+    
+    vlhuwzmdq
+    bsoryk
+    yeka
+    
+    eiqwuz
+    uvwznpqikr
+    wluozi
+    xjbyizufsagdtwm
+    wzhuic
+    
+    wydkjlfzpeqtgxorhmnuci
+    tuczlfqrdnyxihgjopkwem
+    tdpylmxcibgkfhjzwerasnou
+    zelpcrdoygnxjvfmktuhwi
+    gwmehyiojukcnfxrptzdl
+    
+    vcuizfrlhqa
+    rvizlucafhqj
+    cviluqfhraz
+    
+    wmgu
+    ve
+    sgly
+    fmwx
+    
+    ke
+    ek
+    
+    elhq
+    hqel
+    qehl
+    ehql
+    
+    hzdfnwxtjysrio
+    mykgu
+    vy
+    kpmaqy
+    gbeykc
+    
+    pfkj
+    hfkpj
+    kpfj
+    pfjk
+    kpfjd
+    
+    z
+    t
+    z
+    t
+    oxy
+    
+    ux
+    auhzoj
+    xu
+    u
+    
+    gcaldiph
+    lhnfapi
+    
+    slg
+    slg
+    lgs
+    lgs
+    sgl
+    
+    h
+    h
+    h
+    
+    qodwxpmskvjbtycuzghfe
+    pesjgxqzbtdcoyhwmu
+    ylthszqpuwebodxmgcj
+    chqjetzxgdyopbwmuls
+    
+    fkgtmuyoivdehpjcxsba
+    agycjmdsfirvkuowtpbhex
+    
+    ocaw
+    msclaw
+    cwm
+    jdwceh
+    
+    ekfyibdncovguazhjr
+    jkhgzbaoyidunvfr
+    vyaihouznrkgjbfd
+    xghojvrbdnzfuyaki
+    
+    jpgqlhvyi
+    pqihag
+    hqpig
+    gupqhi
+    ghqip
+    
+    glatmnqesbiwzkhup
+    jykuqrbswnmvocx
+    
+    ykqwxpjgcshtdbau
+    dfxqwpgbjcstkyua
+    xsgatjcbkwdyqup
+    usqykjpbgxdcwat
+    
+    cmevolpwiq
+    moagpqevltjiw
+    fmwziqbpuvleko
+    djvspewmohiql
+    
+    mdux
+    xmkud
+    xmdu
+    
+    vptyrkjxhcmounzgaw
+    wkmranuoxcjhslzytdigq
+    mjcazrxkguwfhbtnoy
+    
+    e
+    z
+    mr
+    e
+    
+    vrqek
+    kevrq
+    
+    wb
+    vcti
+    hyar
+    
+    e
+    e
+    
+    chqesv
+    vesqch
+    eqhvcs
+    
+    uae
+    xzecw
+    eyl
+    
+    bkgftdhvn
+    nbfkgdtvhj
+    nhftvgpkdb
+    
+    fwxkbouizcyjg
+    kwfqjgcyxzou
+    gfkdoytrjpczuwx
+    gyjvzcxfuowk
+    mxcjzsnuaefowyhlkg
+    
+    itwzbp
+    yhnafe
+    
+    dtnzjkibprafm
+    fnarjbkiptzdm
+    njrtpifmkbdaze
+    qkndmpaufbrjtiwzx
+    
+    eknujdxzmytriao
+    erkujinftzq
+    eskumatjicdnryz
+    
+    lvzhmxewbgnkuorypfai
+    ibnwkrfogvhaezxumpyl
+    hvbarmnowygqizujxplkef
+    hegopvnwrfybamkluxiz
+    
+    rdylnbotpv
+    raugkqfelbnwy
+    
+    vk
+    gnuypkw
+    kvj
+    kjh
+    
+    uprylxio
+    luixrp
+    ruxplki
+    
+    u
+    gmu
+    
+    ugbqne
+    ykvzwr
+    i
+    
+    vcqosrjbuxtl
+    hovtxlrbcqsu
+    bequwsltvxco
+    vxarnqstcbuzlo
+    cvuxqpobtsjl
+    
+    ctviybroekm
+    cyrtbevimok
+    tvokrbciyme
+    ekctbyvmoir
+    tymcviebokr
+    
+    sdmkxgfhjlpyba
+    puaowzsdqthkle
+    zwredloshkpca
+    
+    fjxo
+    joxf
+    fjxo
+    jfxo
+    fxoj
+    
+    mrqtv
+    rvqtwfm
+    rqmnvt
+    wmrvtq
+    qrftvm
+    
+    qwtjlfobuydncgzheisxr
+    qwxdlcuhjbnemaorpgfyzist
+    
+    zenwdhikljm
+    nejlmiwzkdh
+    jndelhwzkbmi
+    zelhwnijkdm
+    
+    jofdgmy
+    ojqdpbfg
+    gduojf
+    
+    awsgplcxqu
+    mulxgapdcjqk
+    acqjhfldpxgu
+    xluqipvbngact
+    
+    scdzqhyfplnx
+    nxkygdjuzbcqsmvt
+    zlxsqwnpdcay
+    czsxnrqyold
+    
+    qzvlitw
+    njapdb
+    xkbcf
+    uaogk
+    
+    ok
+    e
+    iu
+    
+    qshidleorzbgjnvpuckyawt
+    piojqrtzbnaukgwvchlesd
+    gduvqkcnhioepstrljwbza
+    qhripvstdjznlbgwuocake
+    jevrwsibcqlnutgkohdapz
+    
+    upcealv
+    gmpeyv
+    pve
+    lpkuevz
+    
+    pbtldk
+    bpqhdk
+    cibzd
+    
+    lk
+    hs
+    kx
+    l
+    
+    fkuirx
+    sy
+    zgqw
+    qmv
+    qv
+    
+    gdrtbwcjlhmqk
+    akdlqzjhctgm
+    dchqomkjylaftg
+    
+    vwal
+    ficwjzusyom
+    lw
+    
+    z
+    jyxo
+    n
+    
+    x
+    x
+    x
+    twxs
+    ox
+    
+    jzhaxuflebqwsipgctr
+    mgawzjihxrpcuesfbqtl
+    rljqhausvigxtofwczpbe
+    ifwjsdcbztphlxqrkeuag
+    hizafygceblrquxwtnsjp
+    
+    ioamx
+    xiaomg
+    oxami
+    axoim
+    amibxo
+    
+    dxgwsbmlnyqruckezp
+    xlurgtqncpwyfbisdkejm
+    
+    vflkdqcxbzuwmengty
+    swdbuexzlqvgmf
+    
+    ehsmravbk
+    ehmvrkadb
+    
+    qh
+    hq
+    thqx
+    qh
+    
+    uhi
+    aui
+    ui
+    iu
+    iu
+    
+    wlrnmb
+    yblnpr
+    bztijfenkola
+    
+    y
+    fgzyvds
+    yoj
+    iyp
+    
+    ohbiqfxzp
+    fpqihobx
+    xhoeiqbfp
+    
+    cgfi
+    figc
+    fgci
+    cflgi
+    cihgfnv
+    
+    vytbdxlzuwarjphnogic
+    gexwbnqfizmhtdjyrcolas
+    
+    hdeowrivjq
+    uzihgmjwxrve
+    wijeorhlqdsuv
+    ryeitfhvjw
+    ejhawvnuir
+    
+    siaxlobjmkvcwhernytfugd
+    rmtfsolejkdxihgvbnwcyua
+    oxglvkinrcebswamujfhtdy
+    gwsatohiknljburmdycevxf
+    cwuzdbgnethrvysmxolfkaji
+    
+    m
+    gm
+    bhslre
+    
+    xonqwkzcfbmtidpyvlsheu
+    pylzcoxmvqkehdsnftubjwi
+    nworbkczxutyedsvqfhimpl
+    
+    uatwvlgknhrfoqi
+    nwhbtokfiq
+    seniqpdzfhxmcotyw
+    utoiqafwhn
+    nqtoifwjh
+    
+    oxiflw
+    hflwxo
+    loxwbf
+    
+    mbt
+    tbm
+    
+    ocjflngrdakuypqiwxstzhmvbe
+    ykdaueiczwglbtrhjqnmsfxovp
+    
+    wtlzyrcomasqnjude
+    owhqdnmkzrpjlsxc
+    loqdmszxgvrjwcn
+    
+    on
+    x
+    x
+    
+    lbeyqfxkwm
+    jmqnfxbgwde
+    oezbufqrtm
+    
+    d
+    y
+    y
+    ta
+    
+    z
+    p
+    
+    fyx
+    xfiy
+    fxyw
+    xdfcy
+    fyx
+    
+    csjxkozmnl
+    slomjxkzc
+    
+    hqwadymfsbtlxv
+    kdvbatlfshwqmxy
+    lyahsxmqfwdtbvz
+    wxmlyahfdstvqb
+    tvqdsxfynlhamwb
+    
+    ojmvurikheablq
+    ukidqhvaljobe
+    
+    imc
+    tdkjmp
+    mi
+    
+    eq
+    eq
+    
+    thgulyifqobdwvecmarsjnp
+    ndlygcmjahefquiswbrptvo
+    
+    sjnptmdrlc
+    uvebzmlodrncp
+    lmypxkcfrnsd
+    cnmhdlqxiarwpg
+    
+    nzvqlh
+    hlzvn
+    lzhnv
+    
+    juq
+    ju
+    uj
+    
+    tjqiucmynvozxh
+    kmdvwafrxtq
+    exgqmtv
+    ftsqxmv
+    qklbtmxva
+    
+    r
+    r
+    pj
+    
+    pkoy
+    ypok
+    kypo
+    okyp
+    
+    f
+    fl
+    f
+    f
+    f
+    
+    snvqdyx
+    tdsxvnqy
+    deqynxsv
+    dnsxqvy
+    
+    lzhopfimuretwvd
+    jqgbvakrds
+    
+    zfbocen
+    mzbnacu
+    
+    ezyxtajrv
+    wzjuxreatv
+    
+    mrsejiyuvfz
+    jkuctbxpoiw
+    
+    nyvefxqicbah
+    brgeyltxvik
+    kyuvilexbs
+    ztvixyepb
+    pxiygvbe
+    
+    nadq
+    nyt
+    
+    prmt
+    ysjqkmocznhda
+    gmlibeu
+    bxmvf
+    
+    rm
+    wm
+    m
+    m
+    
+    wyfjzdlvcgreb
+    emlxnkpfjav
+    elijupnfvh
+    
+    pybv
+    bpvy
+    yrbvp
+    
+    zrjkxshpufec
+    vindgwtqbl
+    
+    ngmtqzfcpudhw
+    tphzgcwnqdfmu
+    ftzgphnmcudqw
+    quzpmctfngdwh
+    gqpdhufwcmtzn
+    
+    szfcnb
+    fczns
+    fnzcbsg
+    sznvafck
+    
+    arcezgin
+    egcirazn
+    gezcrian
+    icgnraez
+    
+    hgqucfnt
+    gqnukt
+    qgncut
+    tuqnhg
+    unfgqit
+    
+    w
+    setbdgv
+    
+    lck
+    lxk
+    kcl
+    kl
+    
+    emaqhxorctykufp
+    tigjzqhv
+    
+    mlvow
+    jqwo
+    ghksnruxipoac
+    
+    hxnpeqt
+    htzen
+    nhte
+    pchtne
+    
+    ehovjgfzaql
+    qhazvjlgeof
+    kfgljqhavzoe
+    jvlzfhgoeqa
+    veolzqfjgah
+    
+    bdlitrzuwh
+    epfmuhgvstibr"#
+        .lines()
+        .map(|s| s.trim())
+        .collect::<Vec<&str>>();
+
+    let mut groups = Vec::new();
+    let mut group = HashSet::new();
+
+    for line in &input {
+        if line.is_empty() {
+            groups.push(group);
+            group = HashSet::new();
+        }
+        line.chars().for_each(|c| {
+            group.insert(c);
+        });
+    }
+    groups.push(group);
+
+    println!(
+        "Day 6 - part 1 result {}",
+        groups.iter().map(|g| g.len()).sum::<usize>()
+    );
+
+    let mut groups = Vec::new();
+    let mut group = HashMap::new();
+
+    let mut group_size = 0;
+
+    for line in input {
+        if line.is_empty() {
+            groups.push((group, group_size));
+            group = HashMap::new();
+            group_size = 0;
+            continue;
+        }
+        line.chars().for_each(|c| {
+            *group.entry(c).or_insert(0) += 1;
+        });
+        group_size += 1;
+    }
+    groups.push((group, group_size));
+
+    println!(
+        "Day 6 - part 2 result {}",
+        groups
+            .iter()
+            .map(|(group, size)| group
+                .iter()
+                .filter(|(_, i)| *i == size)
+                .map(|(c, _)| c)
+                .collect::<Vec<&char>>())
+            .map(|m| m.len())
+            .sum::<usize>()
+    );
+
+    println!("Day 7 NOT DONE YET");
+
+    let input = r#"acc +18
+    nop +222
+    acc -16
+    acc +28
+    jmp +475
+    acc -6
+    jmp +584
+    acc -12
+    acc -8
+    jmp +554
+    acc -9
+    acc +12
+    acc -16
+    acc +27
+    jmp +336
+    acc -4
+    jmp +214
+    acc +38
+    jmp +61
+    acc +3
+    acc +28
+    acc +5
+    acc -19
+    jmp +584
+    nop +206
+    jmp +506
+    acc +36
+    jmp +133
+    acc +20
+    acc +43
+    acc -18
+    jmp +409
+    acc +24
+    jmp +131
+    acc -12
+    acc +7
+    acc +7
+    jmp +454
+    acc +37
+    acc -6
+    nop +558
+    acc +31
+    jmp +124
+    acc -15
+    nop +201
+    acc -7
+    jmp +297
+    acc +3
+    nop +517
+    jmp +221
+    jmp +211
+    acc +28
+    acc +35
+    jmp +5
+    acc +31
+    nop +325
+    acc -15
+    jmp +116
+    jmp +1
+    nop +333
+    acc -2
+    acc -5
+    jmp +138
+    acc +19
+    acc +9
+    jmp +180
+    acc +18
+    jmp +228
+    jmp +495
+    jmp +382
+    acc +20
+    nop +414
+    nop +139
+    acc +33
+    jmp +171
+    acc -10
+    jmp +41
+    acc -2
+    jmp +80
+    acc +20
+    nop +451
+    acc +2
+    acc +24
+    jmp +102
+    acc +1
+    acc -11
+    acc +9
+    acc +38
+    jmp -73
+    acc +17
+    acc +16
+    acc +12
+    acc +43
+    jmp +168
+    jmp +286
+    acc +6
+    acc +6
+    jmp +271
+    acc -17
+    acc -5
+    acc +1
+    jmp -50
+    acc -9
+    acc +6
+    acc -2
+    acc +33
+    jmp +385
+    acc +18
+    acc +24
+    jmp +370
+    acc -5
+    acc +23
+    acc +6
+    jmp +98
+    acc -10
+    acc -16
+    jmp +329
+    nop +41
+    jmp +463
+    nop +224
+    acc +35
+    jmp +345
+    acc +34
+    acc -18
+    acc +5
+    jmp +177
+    nop -57
+    nop -80
+    acc +20
+    jmp -12
+    acc +24
+    acc +39
+    jmp +363
+    jmp +253
+    acc -14
+    acc +0
+    acc +22
+    jmp +118
+    acc +43
+    acc -2
+    jmp +300
+    acc -14
+    acc +8
+    acc +47
+    jmp +271
+    jmp +420
+    acc +33
+    acc +15
+    acc +20
+    acc +25
+    jmp +84
+    acc +41
+    jmp +420
+    acc +25
+    jmp +238
+    jmp +1
+    acc +14
+    jmp +415
+    jmp +68
+    jmp +262
+    acc +34
+    jmp +346
+    acc +39
+    jmp +56
+    jmp +364
+    jmp -133
+    acc +13
+    jmp +1
+    acc +33
+    jmp +408
+    acc +29
+    acc -4
+    jmp +319
+    jmp +106
+    jmp +228
+    acc -8
+    acc +8
+    acc +22
+    jmp -146
+    jmp +223
+    acc +27
+    nop +191
+    acc +49
+    jmp +331
+    jmp +39
+    jmp -170
+    acc +28
+    acc -6
+    acc +50
+    jmp +268
+    acc +41
+    nop +254
+    acc +28
+    jmp +269
+    jmp +140
+    acc +10
+    nop +131
+    acc +3
+    jmp -40
+    jmp +373
+    acc +47
+    jmp -91
+    acc -19
+    jmp +300
+    acc -2
+    jmp +1
+    acc +44
+    acc -11
+    jmp +306
+    acc +33
+    jmp -15
+    acc +9
+    jmp +1
+    jmp +144
+    acc +40
+    nop +184
+    nop -75
+    nop +228
+    jmp +296
+    acc +22
+    nop +364
+    jmp -214
+    jmp +18
+    jmp +375
+    acc +22
+    jmp -67
+    acc +8
+    acc -17
+    jmp +174
+    jmp -99
+    nop -45
+    acc +7
+    jmp -213
+    jmp -218
+    acc +50
+    nop +52
+    nop +98
+    jmp -142
+    acc +18
+    jmp +252
+    acc +36
+    jmp -194
+    acc +1
+    nop -53
+    jmp -127
+    jmp +327
+    acc +7
+    acc -9
+    acc +39
+    nop -127
+    jmp +84
+    jmp -117
+    nop -29
+    acc +43
+    jmp -216
+    acc +25
+    acc +16
+    acc +40
+    nop +122
+    jmp +140
+    jmp +180
+    acc +42
+    acc -5
+    acc -14
+    jmp -84
+    jmp -31
+    acc +37
+    acc -11
+    jmp -217
+    jmp +210
+    jmp +170
+    nop +301
+    jmp +309
+    acc +6
+    jmp +135
+    acc +6
+    nop -123
+    acc +17
+    jmp +315
+    acc -1
+    nop -46
+    nop -58
+    nop -59
+    jmp +202
+    acc +48
+    acc +38
+    jmp +86
+    acc -4
+    acc +33
+    acc +28
+    jmp -50
+    nop +43
+    acc +38
+    acc +13
+    jmp +33
+    acc +4
+    acc +6
+    jmp -78
+    acc +22
+    acc +7
+    acc -9
+    jmp -56
+    acc +30
+    nop +54
+    nop -81
+    nop +198
+    jmp +252
+    jmp +1
+    acc +6
+    acc -10
+    acc +29
+    jmp -242
+    jmp +1
+    acc +42
+    acc +34
+    acc +22
+    jmp +231
+    acc +29
+    acc -10
+    jmp -161
+    acc +37
+    acc +9
+    jmp -77
+    acc -15
+    acc +32
+    acc +32
+    jmp -6
+    acc +0
+    nop -124
+    nop +174
+    jmp +20
+    acc +45
+    acc +24
+    jmp -13
+    acc +6
+    acc -10
+    acc +23
+    acc -15
+    jmp +34
+    acc +5
+    acc +38
+    acc +42
+    jmp -116
+    acc +0
+    acc +8
+    jmp -243
+    acc -18
+    acc +25
+    acc +1
+    jmp +158
+    nop +65
+    jmp +1
+    jmp +151
+    acc +12
+    acc +12
+    jmp +1
+    jmp -305
+    jmp +29
+    jmp -263
+    acc +33
+    jmp +1
+    nop +142
+    jmp +78
+    acc +41
+    nop -141
+    acc -9
+    acc +5
+    jmp -245
+    jmp +41
+    acc +16
+    nop -83
+    jmp -28
+    nop -149
+    acc +38
+    jmp -15
+    acc +7
+    nop -329
+    acc +5
+    acc +21
+    jmp -7
+    acc -19
+    jmp -38
+    acc +5
+    acc +3
+    acc +10
+    jmp -181
+    jmp -240
+    acc +19
+    acc +15
+    acc +31
+    acc -11
+    jmp -340
+    acc +12
+    acc +46
+    jmp +127
+    acc +12
+    acc +31
+    acc +30
+    jmp -158
+    acc -10
+    jmp -374
+    jmp +50
+    acc +43
+    nop +42
+    acc +19
+    jmp -232
+    acc -14
+    acc -4
+    jmp +95
+    acc +23
+    acc +49
+    acc +31
+    nop -139
+    jmp -272
+    jmp -141
+    acc +26
+    acc -8
+    jmp +173
+    nop +145
+    nop +133
+    jmp +164
+    acc +7
+    jmp +23
+    acc -4
+    acc +48
+    jmp -138
+    acc +4
+    jmp -389
+    nop +156
+    acc +44
+    acc +40
+    jmp +146
+    nop -247
+    acc +44
+    jmp +1
+    acc +28
+    jmp +95
+    acc +13
+    acc +2
+    jmp -254
+    acc +24
+    jmp +122
+    acc +39
+    acc +0
+    jmp -12
+    jmp -179
+    nop -44
+    nop +100
+    acc -19
+    nop -47
+    jmp -107
+    acc +32
+    acc +33
+    acc +42
+    acc +6
+    jmp -366
+    jmp -122
+    acc +2
+    nop -443
+    nop +72
+    jmp -381
+    jmp -446
+    jmp -332
+    acc -7
+    acc +45
+    jmp -355
+    acc +27
+    acc -4
+    acc +3
+    jmp +96
+    acc +45
+    jmp -402
+    acc +45
+    acc -3
+    acc +22
+    jmp -141
+    acc +29
+    acc -1
+    jmp +29
+    acc -1
+    acc -10
+    jmp -208
+    acc +6
+    nop -196
+    jmp -218
+    acc -12
+    acc +49
+    nop -137
+    jmp -430
+    acc +21
+    jmp -110
+    nop -287
+    acc -3
+    jmp -42
+    jmp -487
+    acc -16
+    acc -1
+    acc +7
+    acc +39
+    jmp -119
+    jmp +1
+    acc +9
+    jmp -23
+    acc +27
+    jmp -300
+    acc +12
+    jmp -440
+    acc +2
+    acc +38
+    acc +12
+    jmp -84
+    acc +25
+    acc -14
+    jmp -418
+    acc -15
+    acc +48
+    jmp +1
+    nop -383
+    jmp -365
+    acc +47
+    jmp -193
+    acc +23
+    jmp -235
+    jmp +1
+    acc -4
+    acc +35
+    nop -64
+    jmp -87
+    acc +32
+    jmp -339
+    jmp -479
+    acc -4
+    acc +32
+    acc -10
+    jmp -77
+    acc +0
+    acc +47
+    acc +41
+    jmp -308
+    acc -8
+    acc -9
+    jmp -229
+    acc -14
+    acc +24
+    nop -380
+    acc +49
+    jmp -174
+    acc -11
+    nop -69
+    jmp +3
+    acc -14
+    jmp -89
+    jmp -301
+    acc +46
+    acc +8
+    nop -156
+    acc +44
+    jmp +1
+    jmp +26
+    acc +17
+    acc +23
+    acc +6
+    jmp -4
+    jmp -97
+    jmp -324
+    acc +2
+    jmp -27
+    nop -195
+    acc +3
+    acc -13
+    acc +15
+    jmp -19
+    acc +30
+    nop -318
+    jmp +19
+    nop -72
+    jmp -315
+    acc +4
+    nop +6
+    jmp -384
+    jmp -505
+    jmp -512
+    acc +33
+    jmp -168
+    jmp -443
+    nop -519
+    acc +7
+    acc +41
+    acc +15
+    jmp -269
+    nop -539
+    jmp -416
+    jmp -326
+    nop -221
+    acc +14
+    jmp -186
+    acc -1
+    jmp -295
+    acc +29
+    acc +43
+    nop -436
+    nop -421
+    jmp -123
+    acc +13
+    acc -11
+    acc +12
+    jmp -155
+    acc +9
+    acc -16
+    acc -15
+    nop -380
+    jmp +1"#;
+
+    let instructions = input.lines().map(|s| s.trim()).collect::<Vec<&str>>();
+    let mut cpu = HGCCpu::new();
+    let mut stackpointer_history = HashSet::new();
+    let mut last_accumulator = 0;
+    loop {
+        cpu.execute(instructions[cpu.stackpointer as usize]);
+        let res = stackpointer_history.insert(cpu.stackpointer);
+        if !res {
+            break;
+        }
+        last_accumulator = cpu.accumulator;
+    }
+
+    println!("Day 8 - part 1 result {}", last_accumulator);
+
+    let input = r#"18
+19
+46
+14
+29
+45
+40
+47
+25
+43
+36
+22
+21
+4
+32
+33
+37
+38
+26
+2
+42
+15
+5
+13
+31
+9
+6
+30
+7
+14
+10
+8
+69
+11
+12
+25
+16
+17
+22
+19
+18
+20
+51
+21
+24
+23
+26
+15
+60
+13
+29
+27
+44
+42
+28
+38
+30
+36
+31
+32
+33
+34
+35
+37
+55
+39
+40
+70
+41
+43
+78
+58
+73
+101
+60
+56
+57
+75
+59
+67
+71
+61
+68
+110
+69
+80
+72
+112
+76
+79
+144
+129
+114
+84
+99
+113
+132
+115
+148
+116
+118
+120
+128
+126
+187
+130
+190
+152
+229
+141
+151
+155
+299
+209
+163
+239
+183
+197
+331
+212
+228
+270
+231
+234
+236
+244
+246
+355
+256
+392
+271
+342
+292
+360
+296
+306
+318
+346
+602
+375
+380
+395
+534
+456
+440
+459
+470
+502
+478
+480
+490
+517
+527
+548
+563
+1082
+1136
+896
+1044
+614
+693
+698
+988
+755
+1065
+1352
+835
+899
+915
+942
+929
+1173
+958
+1043
+970
+1007
+1075
+1090
+1529
+1750
+1663
+1307
+1312
+1533
+1369
+1391
+1705
+1590
+1654
+1734
+1764
+1805
+2923
+2649
+1936
+1899
+2633
+1928
+2681
+1977
+3956
+2165
+2981
+2619
+3926
+2676
+2840
+2703
+4292
+4547
+4383
+4628
+3244
+3388
+3539
+6659
+6602
+5143
+3827
+5316
+8558
+3905
+5322
+4142
+4817
+4784
+9069
+5379
+11206
+5516
+7536
+10701
+6242
+7293
+6632
+15190
+11260
+7366
+7732
+7681
+7969
+8959
+9521
+8611
+8047
+10139
+8689
+16605
+8926
+10300
+10163
+10895
+15262
+12148
+13925
+12874
+15025
+13974
+19229
+14313
+15047
+15098
+15335
+15413
+16370
+16016
+16658
+27899
+16736
+18852
+35245
+17615
+19089
+19821
+29984
+23769
+23043
+30309
+31705
+26799
+26848
+35105
+28287
+30382
+42183
+30748
+30433
+31351
+31429
+32386
+32674
+33394
+44635
+34351
+50281
+36704
+60293
+69456
+42864
+49891
+46812
+49842
+53647
+55086
+85047
+119298
+60961
+75099
+62099
+73297
+94916
+61784
+62780
+63815
+75250
+96654
+67745
+104928
+71055
+111242
+133358
+89676
+92706
+151460
+134938
+101898
+158753
+108733
+122831
+122745
+123060
+293691
+126595
+165971
+142995
+125599
+130525
+146305
+194115
+402424
+179788
+138800
+226064
+160731
+182382
+235256
+191574
+194604
+210631
+224643
+269464
+231478
+231564
+245576
+253585
+248659
+252194
+276830
+256124
+411266
+371362
+299531
+354846
+654618
+340519
+330374
+459212
+343113
+695365
+431041
+386178
+402205
+405235
+435274
+456121
+633683
+504783
+477140
+586095
+701736
+500853
+508318
+654377
+555655
+640050
+741024
+642644
+673487
+1288060
+802325
+716552
+729291
+1497690
+1073685
+1273733
+821452
+807440
+891395
+912414
+933261
+977993
+1117190
+1140903
+1210054
+1009171
+1143497
+1063973
+1445843
+1195705
+1282694
+2428963
+1316131
+1390039
+1518877
+2095183
+2337706
+1536731
+1628892
+1698835
+2076758
+1712847
+1803809
+1824656
+1845675
+2962865
+1987164
+2073144
+2150074
+2152668
+2204876
+2207470
+2981529
+2478399
+3128369
+2908916
+4192040
+2706170
+2926770
+3055608
+3790973
+3165623
+3235566
+3327727
+3502644
+5835686
+3516656
+3628465
+3670331
+7131109
+5941736
+5116386
+4278020
+4913640
+4412346
+5186405
+4685869
+7293617
+5834539
+5615086
+6383335
+5632940
+9001309
+5982378
+6221231
+6401189
+6493350
+6563293
+6830371
+8188513
+7145121
+10907100
+10354082
+7948351
+11998421
+8690366
+9528732
+8963889
+15987022
+10318809
+9872274
+13376235
+16136864
+11248026
+12016275
+14983687
+17469257
+12203609
+12383567
+26433146
+12894539
+13056643
+13393664
+13975492
+15093472
+26270774
+16638717
+16912240
+18492621
+17654255
+22066601
+25440210
+18836163
+20191083
+21120300
+23264301
+26870031
+33085622
+23451635
+24399842
+24587176
+25098148
+51578243
+35095792
+34176943
+37980840
+35460265
+27369156
+29068964
+37160073
+33550957
+36146876
+62568016
+47164749
+41311383
+44778259
+45631293
+39027246
+52333265
+55938995
+48549783
+50321666
+77431413
+47851477
+48987018
+65898559
+52467304
+83311625
+68646749
+74487511
+69011222
+80925135
+76187319
+62619921
+115214565
+167547830
+136864130
+91943008
+131266670
+80338629
+83805505
+86878723
+87577029
+100184742
+117561005
+139346027
+116498226
+96838495
+129912153
+101454322
+115087225
+213051449
+150674830
+246410379
+154562929
+216668887
+138807240
+195425854
+142958550
+164144134
+267732572
+167217352
+167915658
+170684228
+185259827
+171382534
+244412872
+184415524
+265598456
+198292817
+211925720
+213336721
+334233094
+216541547
+240261562
+253894465
+369675351
+281765790
+335133010
+323222764
+505860018
+328218377
+354884270
+307102684
+331361486
+337901580
+379143072
+338599886
+342066762
+456803109
+355798058
+382708341
+594634061
+410218537
+536559485
+425262441
+429878268
+547903033
+523644231
+535660255
+585255951
+753480818
+588868474
+630325448
+662900742
+788164595
+635321061
+638464170
+645004264
+669263066
+734941130
+680666648
+694397944
+1055587889
+1363661010
+738506399
+792926878
+945878792
+1277125049
+1108900182
+1357298686
+1298221803
+776203571
+1275329712
+1124528729
+1174124425
+1343567390
+1219193922
+1310992096
+1759849790
+1527868008
+1428247939
+1283468434
+1314267330
+1349929714
+1375064592
+1917455607
+2517415725
+1531433277
+1514709970
+2328094104
+2959681216
+1722082363
+2811336442
+1885103753
+1900732300
+2126133285
+1950327996
+2884378519
+2552776668
+2549189017
+2502662356
+2530186018
+2594460530
+2633398148
+2597735764
+2658533026
+5542911545
+2664197044
+2724994306
+4032125695
+3046143247
+4048849002
+3236792333
+3399813723
+3607186116
+6636606056
+3622814663
+6048128775
+6109848472
+3851060296
+4076461281
+7094992249
+5032848374
+5051851373
+5079375035
+5097122886
+5124646548
+5192196294
+5231133912
+6843978449
+5322730070
+5771137553
+7268918028
+7448662725
+6445956970
+7122604528
+6859606996
+7006999839
+7022628386
+10068771633
+14029628225
+7473874959
+10514926364
+13866606835
+7927521577
+9109309655
+10084699747
+12705008871
+12219727414
+10176497921
+10316842842
+10355780460
+12253762298
+10553863982
+19522680326
+21340481794
+12630744549
+13305563966
+13452956809
+13468585356
+13882235382
+14480874798
+14934521416
+17199126307
+19663173637
+15401396536
+16583184614
+17036831232
+23021851713
+18104019498
+32584894296
+24022449338
+37475406147
+30076544308
+20672623302
+37709454534
+20909644442
+22807626280
+23184608531
+25936308515
+26083701358
+27187799348
+28240085382
+26921542165
+28403106772
+28363110180
+29415396214
+46507126270
+48026283817
+35140850730
+40058682945
+41059280570
+43480249582
+43694475015
+38776642800
+49268309889
+46993345800
+41582267744
+43717270722
+55590906120
+49272754622
+44094252973
+71720334964
+49120917046
+92815392061
+53005243523
+54109341513
+91506533399
+55284652345
+79835923370
+104405569391
+76408742014
+91720758832
+73917493530
+78835325745
+85769988600
+80358910544
+140841675878
+124053385559
+113302602708
+120126012736
+85299538466
+123190248152
+142088146683
+125529659060
+93367007595
+236492850860
+107114585036
+102126160569
+108289895868
+130518083527
+174235354249
+165424026929
+140584190811
+170556084577
+150326235544
+161708280480
+192137928453
+180961486314
+205425551202
+166128899144
+165658449010
+178666546061
+200481592631
+233951198406
+307551711771
+187425699035
+306713089955
+201656903463
+195493168164
+209240745605
+366092245096
+238807979395
+210416056437
+366610491775
+302292471291
+290910426355
+374535389217
+311140275388
+312034516024
+331787348154
+327366729490
+402138496094
+344324995071
+344795445205
+353084148045
+387907291666
+374159714225
+491392018986
+434301147559
+382918867199
+389082602498
+503949374754
+397150071627
+715274021156
+419656802042
+449224035832
+512708527728
+612554552531
+593202897646
+776673885311
+685675664605
+623174791412
+638507004878
+736003015244
+659154077644
+886868241953
+733878047703
+763981797113
+1269787109152
+750234219672
+763242316723
+1248711542972
+780068938826
+1048236680142
+1862990006798
+1418575943704
+1620746289656
+2003665156855
+2198644882530
+868880837874
+2005790124396
+1205757450177
+1216377689058
+1297661082522
+1324182669483
+3868780131194
+1261681796290
+1372385052581
+1393032125347
+1409388297316
+1497120364426
+1484112267375
+1513476536395
+1530303158498
+1543311255549
+1632123154597
+1648949776700
+1828305618968
+2532348947517
+2241265890455
+2946610859222
+2074638288051
+2193063507357
+2517830614574
+2085258526932
+2422135139235
+2585864465773
+2514038771580
+2654713921637
+2893804950887
+2634066848871
+2745794063665
+2765417177928
+4424108109385
+2893500564691
+2981232631801
+7009972575158
+3043779694893
+3073614414047
+3175434410146
+6249048824193
+4606987235568
+4250440758203
+4827130356228
+4159896814983
+7588219867369
+4599297298512
+7672911712559
+4507393666167
+10418705776224
+5076849060872
+5099903237353
+5689473181726
+5527871799758
+5399484026799
+14682884287717
+5511211241593
+5658917742619
+7497722523432
+5874733196492
+6025012326694
+6117394108940
+7425875168349
+7233511229030
+7335331225129
+8410337573186
+9327289819075
+10127169098270
+8987027171211
+12734815251928
+19190277953884
+9906877692966
+22180606811149
+9584242727039
+12825359195148
+10176752298225
+15596350874692
+10910695268392
+11170128984212
+11058401769418
+11385944438085
+11533650939111
+11683930069313
+14435349899880
+13210064421621
+28298000920089
+13350905337970
+21660820037381
+16560801048105
+16919573952168
+20713234257160
+18314316990286
+18571269898250
+24120759690013
+19491120420005
+19760995025264
+20083629991191
+20494937995431
+20642644496457
+29372718759704
+21235154067643
+31146939463349
+31469574429276
+39831651859200
+31553339764849
+23069874507398
+26560969759591
+45904924329156
+50681729449604
+32842025757975
+30270479290138
+31665222328256
+33480375000273
+34875118038391
+55785982018269
+40255933020695
+36885586888536
+38062390318255
+39252115445269
+39844625016455
+40403639521721
+47055907755022
+67698552251479
+41877798564100
+53340353797536
+59297544385898
+49630844266989
+54539448936674
+62321989952667
+54623214272247
+83941494643558
+72686650774430
+63112505048113
+113794234497717
+123786119660013
+68355493038664
+88215471835927
+98549659831167
+71760704926927"#;
+
+    let numbers = input
+        .lines()
+        .map(|s| s.trim().parse::<u64>().unwrap())
+        .collect::<Vec<u64>>();
+
+    let invalid = find_first_invalid_xmas_number(&numbers, 25).unwrap();
+
+    println!("Day 9 - part 1 result {}", invalid);
+
+    let numbers = input
+        .lines()
+        .map(|s| s.trim().parse::<u64>().unwrap() )
+        .collect::<Vec<u64>>();
+
+    let number = find_first_invalid_xmas_number(&numbers, 25).unwrap();
+
+    let set = find_contiguous_set_sum_to(number, &numbers);
+    let smallest = set.iter().min().unwrap();
+    let highest = set.iter().max().unwrap();
+
+    println!("Day 9 - part 2 result {}", smallest + highest);
 }
